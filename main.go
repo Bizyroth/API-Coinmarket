@@ -6,6 +6,7 @@ import (
 	//"os"
 	"net/http"
 	"io/ioutil"
+	"time"
 )
 
 
@@ -34,6 +35,8 @@ type API struct{
 func main(){
 	//i := 0
 	url:="https://api.coinmarketcap.com/v1/ticker/?convert=EUR&limit=10"
+
+ for {
 	cli := http.Client{}
 
 	
@@ -54,6 +57,8 @@ func main(){
 		//fmt.Println(string(body))
 		fmt.Printf("%20v     %3v      %15v       %6v      %10v", aa[l].Id,aa[l].Symbol,aa[l].Price_eur, 	aa[l].Percent24h, aa[l].Percent7d)
 		fmt.Println()
+	}
+	time.Sleep(5 * time.Minute)
 }		
 
 	
