@@ -1,7 +1,11 @@
+// TODO create a package for all core functionality
+// TODO create a cmd/coinmarket directory for the main.go file.
+
 package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -9,7 +13,10 @@ import (
 	"time"
 )
 
-type aPI struct {
+// TODO use this endpoint to retrieve top 10 cryptomoney in Euro
+// https://api.coinmarketcap.com/v1/ticker/?limit=10&convert=EUR
+
+type api struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
 	Symbol          string `json:"symbol"`
@@ -29,8 +36,9 @@ type aPI struct {
 	MarketCapEur    string `json:"market_cap_eur"`
 }
 
-func getAPICoinmarket(money string) (ap []aPI, err error) {
-	var a []aPI
+// Get specificat cryptomoney informations from coinmarketcap.com
+func getAPICoinmarket(money string) ([]api, error) {
+	var a []api
 	url := "https://api.coinmarketcap.com/v1/ticker/" + money + "/?convert=EUR"
 	cli := http.Client{}
 	req, err := cli.Get(url)
@@ -46,10 +54,6 @@ func getAPICoinmarket(money string) (ap []aPI, err error) {
 
 	err = json.Unmarshal(body, &a)
 	return a, err
-}
-
-func getDouble(num string) (float64, error) {
-	return strconv.ParseFloat(num, 64)
 }
 
 type eosAPI struct {
@@ -79,91 +83,57 @@ func getEosAPI() (ap []eosAPI, err error) {
 	return a, err
 }
 
-func compareDate(t1 time.Time, t2 time.Time) int {
-	if t1.Year() < t2.Year() {
-		return 1
-	}
-	if t1.Year() > t2.Year() {
-		return -1
-	}
-	if t1.Month() < t2.Month() {
-		return 1
-	}
-	if t1.Month() > t2.Month() {
-		return -1
-	}
-	if t1.Day() < t2.Day() {
-		return 1
-	}
-	if t1.Day() > t2.Day() {
-		return -1
-	}
-	if t1.Minute() < t2.Minute() {
-		return 1
-	}
-	if t1.Minute() > t2.Minute() {
-		return -1
-	}
-	if t1.Second() < t2.Second() {
-		return 1
-	}
-	if t1.Second() > t2.Second() {
-		return -1
-	}
-	return 0
-}
-
+// TODO documentation
 func getPeriod(ap []eosAPI) int {
-	i := 0
 	t := time.Now().UTC()
-	for i < 365 {
+	for i := 0; i < 365; i++ {
 		tB, _ := time.Parse(time.RFC3339, ap[i].Begins)
 		tE, _ := time.Parse(time.RFC3339, ap[i].Ends)
-		if compareDate(tB, t) == 1 && compareDate(t, tE) == 1 {
+		if tB.Before(t) && t.Before(tE) {
 			return i
 		}
-		i++
 	}
 	return -1
 }
 
+// TODO: add documentation
 func getNumberToken(totalOwnEth float64, totalEosToken float64, totalAllEth float64) float64 {
 	return totalOwnEth * (totalEosToken / totalAllEth)
 }
 
-func mustBuy(numToken float64, priceEos float64, priceEth float64) bool {
+// TODO: add documentation
+// return price Eos to buy, price Eso to sell, and percentage of gain if > 0.
+func mustBuy(numToken float64, priceEos float64, priceEth float64) (float64, float64, float64) {
 	priceEosInEth := 1 / numToken
-
 	priceEosSell := priceEosInEth * priceEth
+	percentGain := float64(0)
 
-	fmt.Printf("Price Eos to buy: \t\t\t%v\n", priceEosSell)
-	fmt.Printf("Price Eos to sell: \t\t\t%v\n", priceEos)
 	if priceEos > priceEosSell {
-		fmt.Printf("gain en pourcentage \t\t\t%v\n", 100*priceEos/priceEosSell)
-		return true
+		percentGain = 100 * priceEos / priceEosSell
 	}
-	return false
+	return priceEosSell, priceEos, percentGain
 }
 
-func main() {
+var flagTime = flag.Int("time", 3, "update every X second")
 
-	for {
+func main() {
+	flag.Parse()
+
+	// TODO better naming
+	fmt.Printf("\n%20s   %20s   %20s   %20s   %20s\n", "Price EOS in USD", "numToken per eth", "Price Eos to buy", "Price Eos to sell", "Percentage of gain")
+	fmt.Printf("%20s   %20s   %20s   %20s   %20s", "...", "...", "...", "...", "...")
+
+	// update periodically
+	for range time.Tick(time.Duration(*flagTime) * time.Second) {
+		// get EOS datas
 		eosAP, err := getAPICoinmarket("eos")
 		if err != nil {
 			fmt.Println("Error: " + err.Error())
 		}
-		ethAP, err := getAPICoinmarket("ethereum")
-		if err != nil {
-			fmt.Println("Error: " + err.Error())
-		}
-		ethPriceUs, err := getDouble(ethAP[0].PriceUsd)
-		eosPriceUs, err := getDouble(eosAP[0].PriceUsd)
+		eosPriceUs, err := strconv.ParseFloat(eosAP[0].PriceUsd, 64)
 		if err != nil {
 			fmt.Println("Error conversion: " + err.Error())
 		}
-
-		fmt.Printf("Price EOS in USD: \t\t\t%v\n", eosPriceUs)
-
 		eosScan, err := getEosAPI()
 		if err != nil {
 			fmt.Printf("error eos api: " + err.Error())
@@ -173,10 +143,21 @@ func main() {
 			fmt.Printf("Period: Fail Period\n")
 		}
 
+		// get ether datas
+		ethAP, err := getAPICoinmarket("ethereum")
+		if err != nil {
+			fmt.Println("Error: " + err.Error())
+		}
+		ethPriceUs, err := strconv.ParseFloat(ethAP[0].PriceUsd, 64)
+		if err != nil {
+			fmt.Println("Error conversion: " + err.Error())
+		}
+
+		// ???
 		numToken := getNumberToken(1.0, eosScan[i].CreateOnDay, eosScan[i].DailyTotal)
-		fmt.Printf("numToken per eth: \t\t\t%v\n", numToken)
-		mustBuy(numToken, eosPriceUs, ethPriceUs)
-		fmt.Printf("\n\n")
-		time.Sleep(7 * time.Second)
+		eosToBuy, eosToSell, gain := mustBuy(numToken, eosPriceUs, ethPriceUs)
+
+		// TODO: detect Unix or Windows to use cursor position
+		fmt.Printf("\r%20v   %20v   %20v   %20v   %20v", eosPriceUs, numToken, eosToBuy, eosToSell, gain)
 	}
 }
